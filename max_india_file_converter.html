@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Max India File Converter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --navy:#00235C;
+    --navy-deep:#001740;
+    --green:#4E9A51;
+    --green-soft:#E3F0E3;
+    --paper:#F7F8FA;
+    --ink:#1B2430;
+    --muted:#6B7688;
+    --line:#DDE2EA;
+    --amber:#B8860B;
+    --red:#B03A3A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  header{
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy-deep) 100%);
+    color:#fff;
+    padding:28px 32px 24px;
+  }
+  header .eyebrow{
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:#9FB3D9;margin-bottom:6px;
+  }
+  header h1{font-size:26px;font-weight:600;letter-spacing:-.01em}
+  header p{margin-top:6px;font-size:13.5px;color:#C6D3EA;max-width:640px}
+  main{max-width:1200px;margin:0 auto;padding:28px 24px 60px}
+
+  /* Drop zone */
+  .dropzone{
+    border:2px dashed #B6C3D9;
+    border-radius:12px;
+    background:#fff;
+    padding:36px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s,background .15s;
+  }
+  .dropzone:hover,.dropzone.drag{border-color:var(--navy);background:#F0F4FB}
+  .dropzone .big{font-size:17px;font-weight:600;color:var(--navy)}
+  .dropzone .small{font-size:13px;color:var(--muted);margin-top:6px}
+  .dropzone svg{width:40px;height:40px;margin-bottom:10px;stroke:var(--navy)}
+  .dropzone.compact{padding:16px 24px;margin-top:18px}
+  .dropzone.compact svg{display:none}
+  .dropzone.compact .big{font-size:14px}
+  .dropzone.compact .small{display:inline;margin-left:8px}
+  #fileInput{display:none}
+
+  /* Toolbar */
+  .toolbar{
+    display:none;
+    align-items:center;gap:14px;flex-wrap:wrap;
+    background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:14px 18px;margin-bottom:16px;
+  }
+  .toolbar.show{display:flex}
+  .toolbar .summary{font-size:13.5px;font-weight:600}
+  .toolbar .summary span{color:var(--muted);font-weight:400}
+  .spacer{flex:1}
+  button{
+    font:inherit;font-size:13.5px;font-weight:600;
+    border:none;border-radius:8px;padding:10px 18px;cursor:pointer;
+    transition:transform .1s,box-shadow .15s;
+  }
+  button:active{transform:translateY(1px)}
+  .btn-primary{background:var(--green);color:#fff;box-shadow:0 2px 6px rgba(78,154,81,.35)}
+  .btn-primary:hover{box-shadow:0 4px 10px rgba(78,154,81,.45)}
+  .btn-ghost{background:transparent;color:var(--navy);border:1.5px solid var(--line)}
+  .btn-ghost:hover{border-color:var(--navy)}
+  .btn-small{padding:7px 13px;font-size:12.5px}
+
+  /* File tabs */
+  .filetabs{display:none;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .filetabs.show{display:flex}
+  .filetab{
+    display:flex;align-items:center;gap:10px;
+    background:#fff;border:1.5px solid var(--line);border-radius:9px;
+    padding:9px 14px;cursor:pointer;font-size:12.5px;
+    transition:border-color .15s,background .15s;
+    max-width:320px;
+  }
+  .filetab:hover{border-color:#9FB0CB}
+  .filetab.active{border-color:var(--navy);background:#F0F4FB}
+  .filetab .fn{
+    font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    max-width:180px;
+  }
+  .filetab .meta{color:var(--muted);font-size:11.5px;white-space:nowrap}
+  .filetab .meta b{color:var(--green)}
+  .filetab.error .fn{color:var(--red)}
+  .filetab .remove{
+    border:none;background:none;padding:2px 4px;cursor:pointer;
+    color:#98A2B3;font-size:14px;line-height:1;font-weight:400;
+  }
+  .filetab .remove:hover{color:var(--red)}
+
+  /* Table */
+  .table-card{
+    display:none;
+    background:#fff;border:1px solid var(--line);border-radius:10px;
+    overflow:auto;max-height:58vh;
+  }
+  .table-card.show{display:block}
+  table{border-collapse:collapse;width:max-content;min-width:100%;font-size:12.5px}
+  th{
+    position:sticky;top:0;z-index:2;
+    background:var(--navy);color:#fff;
+    padding:9px 12px;text-align:left;white-space:nowrap;
+    font-weight:600;font-size:11.5px;letter-spacing:.03em;
+  }
+  th.green-col{background:#0B3D0F}
+  th .tag{
+    display:inline-block;margin-left:6px;font-size:9px;
+    background:var(--green);border-radius:3px;padding:1px 5px;
+    vertical-align:middle;letter-spacing:.08em;
+  }
+  td{
+    padding:7px 12px;border-bottom:1px solid #EEF1F5;white-space:nowrap;
+    color:#2A3442;
+  }
+  tr:nth-child(even) td{background:#FAFBFD}
+  td.changed{
+    background:var(--green-soft) !important;
+    color:#1E5C22;font-weight:600;
+  }
+  td.changed::after{
+    content:attr(data-old);
+    display:block;font-weight:400;font-size:10.5px;
+    color:#96A0AE;text-decoration:line-through;
+  }
+  .legend{
+    display:none;gap:18px;margin:0 2px 10px;font-size:12px;color:var(--muted);
+    align-items:center;flex-wrap:wrap;
+  }
+  .legend.show{display:flex}
+  .chip{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:6px}
+  .chip.g{background:var(--green-soft);border:1px solid var(--green)}
+  .active-actions{display:none;align-items:center;gap:10px;margin:0 0 10px}
+  .active-actions.show{display:flex}
+  .active-actions .name{font-size:13px;font-weight:600}
+  .warn{
+    display:none;margin-top:14px;font-size:12.5px;color:var(--amber);
+    background:#FBF6E8;border:1px solid #EAD9A8;border-radius:8px;padding:10px 14px;
+  }
+  .warn.show{display:block}
+  .warn.err{color:var(--red);background:#FBECEC;border-color:#E5B9B9}
+
+  /* Rules panel */
+  details{
+    margin-top:26px;background:#fff;border:1px solid var(--line);border-radius:10px;
+  }
+  summary{
+    cursor:pointer;padding:14px 18px;font-weight:600;font-size:14px;color:var(--navy);
+    list-style:none;
+  }
+  summary::before{content:"▸ ";font-size:12px}
+  details[open] summary::before{content:"▾ "}
+  .rules{padding:0 18px 18px;font-size:13px;line-height:1.65;color:#3A4454}
+  .rules code{
+    background:#F0F3F8;border-radius:4px;padding:1px 6px;
+    font-family:Consolas,Menlo,monospace;font-size:12px;color:var(--navy);
+  }
+  .rules .arrow{color:var(--green);font-weight:700}
+  .rules div{margin-bottom:7px}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Customer files &rarr; Buyer format</div>
+  <h1>Max India File Converter</h1>
+  <p>Drop one or more customer Excel files below. Every formatting rule the buyer requires is applied automatically to each file, and changed cells are shown with the original value struck through.</p>
+</header>
+
+<main>
+  <div class="dropzone" id="dropzone">
+    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+    </svg>
+    <div class="big">Drop customer files here, or click to browse</div>
+    <div class="small">.xlsx or .xls &mdash; select several at once &mdash; nothing leaves your computer</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <div class="summary" id="summaryText"></div>
+    <div class="spacer"></div>
+    <button class="btn-ghost" id="clearBtn">Clear all</button>
+    <button class="btn-ghost" id="downloadMasterBtn">Download master only</button>
+    <button class="btn-primary" id="downloadAllBtn">Download all as ZIP</button>
+  </div>
+
+  <div class="filetabs" id="filetabs"></div>
+
+  <div class="active-actions" id="activeActions">
+    <div class="name" id="activeName"></div>
+    <div class="spacer"></div>
+    <button class="btn-ghost btn-small" id="downloadOneBtn">Download this file (.xlsx)</button>
+  </div>
+
+  <div class="legend" id="legend">
+    <span><span class="chip g"></span>Changed cell (original shown struck through)</span>
+    <span>Dark-green headers = the highlighted columns with extra rules</span>
+  </div>
+
+  <div class="table-card" id="tableCard"></div>
+  <div class="warn" id="warn"></div>
+
+  <details>
+    <summary>Rules applied by this converter</summary>
+    <div class="rules">
+      <div><b>Sheet &amp; header handling</b> &mdash; only the <b>SKU</b> tab is read (PREPACK and any other tabs are ignored). The converter finds the <code>DEPARTMENT</code> header row wherever it sits, so titles above it like <code>PO - Barcode -SKU</code> are skipped, and bottom totals rows (blank lines with only an ORDER_QTY sum) are dropped.</div>
+      <div><b>DEPARTMENT</b> &mdash; only the <i>first</i> space becomes a hyphen; text stays UPPERCASE. <code>ACC BAGS</code> <span class="arrow">&rarr;</span> <code>ACC-BAGS</code>, <code>KW 2-8 YRS GIRLS</code> <span class="arrow">&rarr;</span> <code>KW-2-8 YRS GIRLS</code></div>
+      <div><b>MRP</b> &mdash; values of 1000+ get a space as thousands separator. <code>1499</code> <span class="arrow">&rarr;</span> <code>1 499</code>; <code>799</code> stays <code>799</code></div>
+      <div><b>MONTH_YEAR</b> &mdash; every value normalised to <code>MM/YYYY</code> text. <code>01-Aug-26</code> (date cell) <span class="arrow">&rarr;</span> <code>08/2026</code></div>
+      <div><b>PRODUCT</b> &mdash; Title Case each word. <code>SWEATSHIRT AND PANT</code> <span class="arrow">&rarr;</span> <code>Sweatshirt And Pant</code></div>
+      <div><b>SIZE_DESC</b> &mdash; Title Case, but units <code>CM</code>/<code>M</code> go fully lowercase and the separator <code>X</code> stays uppercase. <code>CHEST-62 CM WAIST-44 CM</code> <span class="arrow">&rarr;</span> <code>Chest-62 cm Waist-44 cm</code></div>
+      <div><b>QTY</b> &mdash; Title Case the unit word. <code>1 NUMBER</code> <span class="arrow">&rarr;</span> <code>1 Number</code>, <code>1 SET</code> <span class="arrow">&rarr;</span> <code>1 Set</code></div>
+      <div><b>ITEM_CODE, EAN_BARCODE, PO_NUMBER</b> &mdash; always written as plain text with every digit shown, never scientific notation. <code>1.00002E+12</code> <span class="arrow">&rarr;</span> <code>1000016816762</code></div>
+      <div><b>Master file</b> &mdash; "Download all as ZIP" also includes <code>MASTER_Buyer_File_&lt;date&gt;.xlsx</code>, which stacks the converted rows from every uploaded file (in upload order) into one sheet with the standard column layout. "Download master only" saves just that file.</div>
+      <div><b>All other columns</b> (CLASS - SUBCLASS, SEASON_SUPPLIER_CODE, STYLE_CODE_GROUP, CODE, COLOUR, ORDER_QTY) are copied through unchanged. Note columns after PO_NUMBER (e.g. "CLIENT FILE") are dropped.</div>
+    </div>
+  </details>
+</main>
+
+<script>
+(function(){
+  const KNOWN_HEADERS = ["DEPARTMENT","CLASS - SUBCLASS","SEASON_SUPPLIER_CODE","ITEM_CODE","EAN_BARCODE","STYLE_CODE_GROUP","MRP","MONTH_YEAR","PRODUCT","SIZE_DESC","CODE","COLOUR","QTY","ORDER_QTY","PO_NUMBER"];
+  const GREEN_COLS = new Set(["DEPARTMENT","PRODUCT","SIZE_DESC","QTY"]);
+
+  const dz = document.getElementById('dropzone');
+  const fi = document.getElementById('fileInput');
+  const toolbar = document.getElementById('toolbar');
+  const filetabs = document.getElementById('filetabs');
+  const tableCard = document.getElementById('tableCard');
+  const legend = document.getElementById('legend');
+  const warn = document.getElementById('warn');
+  const activeActions = document.getElementById('activeActions');
+  const activeName = document.getElementById('activeName');
+
+  // files: [{name, headers, rows, changed, missing, error}]
+  let files = [];
+  let activeIdx = -1;
+
+  dz.addEventListener('click', ()=>fi.click());
+  dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag');});
+  dz.addEventListener('dragleave', ()=>dz.classList.remove('drag'));
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.classList.remove('drag');
+    if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+  fi.addEventListener('change', ()=>{ if(fi.files.length){ handleFiles(fi.files); fi.value=""; } });
+  document.getElementById('clearBtn').addEventListener('click', clearAll);
+  document.getElementById('downloadAllBtn').addEventListener('click', downloadAll);
+  document.getElementById('downloadMasterBtn').addEventListener('click', downloadMaster);
+  document.getElementById('downloadOneBtn').addEventListener('click', ()=>{
+    if(activeIdx>=0) downloadOne(files[activeIdx]);
+  });
+
+  function clearAll(){
+    files=[]; activeIdx=-1;
+    updateUI();
+  }
+
+  /* ---------- transformation rules ---------- */
+
+  function titleWord(w){
+    let out="", done=false;
+    for(const ch of w){
+      if(!done && /[A-Za-z]/.test(ch)){ out+=ch.toUpperCase(); done=true; }
+      else out+= done||!/[A-Za-z]/.test(ch) ? ch.toLowerCase() : ch;
+    }
+    return out;
+  }
+  function titleCase(s){
+    return String(s).split(/(\s+)/).map(p=>/\s/.test(p)?p:titleWord(p)).join('');
+  }
+  function txDepartment(v){
+    if(v==null) return v;
+    return String(v).replace(' ', '-'); // first space only
+  }
+  function txMRP(v){
+    if(v==null||v==="") return v;
+    const n = Number(String(v).replace(/\s/g,''));
+    if(!isNaN(n) && Math.abs(n)>=1000 && Number.isInteger(n)){
+      return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+    }
+    return isNaN(n) ? v : n;
+  }
+  function txMonthYear(v){
+    if(v==null||v==="") return v;
+    if(v instanceof Date){
+      const m = String(v.getMonth()+1).padStart(2,'0');
+      return m + '/' + v.getFullYear();
+    }
+    if(typeof v === 'number'){
+      const d = XLSX.SSF.parse_date_code(v);
+      if(d) return String(d.m).padStart(2,'0') + '/' + d.y;
+    }
+    const s = String(v).trim();
+    let m;
+    if(m = s.match(/^(\d{1,2})\/(\d{4})$/)) return m[1].padStart(2,'0')+'/'+m[2];
+    if(m = s.match(/^(\d{4})-(\d{1,2})(-\d{1,2})?/)) return m[2].padStart(2,'0')+'/'+m[1];
+    const d = new Date(s);
+    if(!isNaN(d)) return String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+    return s;
+  }
+  function txProduct(v){
+    if(v==null) return v;
+    return titleCase(v);
+  }
+  function txSizeDesc(v){
+    if(v==null) return v;
+    return String(v).split(/(\s+)/).map(p=>{
+      if(/\s/.test(p)) return p;
+      const up = p.toUpperCase();
+      if(up==='CM'||up==='M'||up==='MM'||up==='IN') return p.toLowerCase();
+      if(up==='X') return 'X';
+      return titleWord(p);
+    }).join('');
+  }
+  function txQty(v){
+    if(v==null) return v;
+    return titleCase(v);
+  }
+  function txIdAsText(v){
+    // force long codes to plain text so Excel never shows 1.00002E+12
+    if(v==null||v==="") return v;
+    if(typeof v === 'number'){
+      return v.toLocaleString('fullwide', {useGrouping:false});
+    }
+    const s = String(v).trim();
+    if(/^\d+(\.\d+)?[eE]\+?\d+$/.test(s)){
+      return Number(s).toLocaleString('fullwide', {useGrouping:false});
+    }
+    return s;
+  }
+
+  const RULES = {
+    "DEPARTMENT": txDepartment,
+    "MRP": txMRP,
+    "MONTH_YEAR": txMonthYear,
+    "PRODUCT": txProduct,
+    "SIZE_DESC": txSizeDesc,
+    "QTY": txQty,
+    "ITEM_CODE": txIdAsText,
+    "EAN_BARCODE": txIdAsText,
+    "PO_NUMBER": txIdAsText
+  };
+
+  /* ---------- file handling ---------- */
+
+  function handleFiles(fileList){
+    const list = Array.from(fileList).filter(f=>/\.(xlsx|xls)$/i.test(f.name));
+    const skipped = fileList.length - list.length;
+    if(skipped>0 && list.length===0){
+      alert('Only .xlsx and .xls files are supported.');
+      return;
+    }
+    let remaining = list.length;
+    list.forEach(file=>{
+      const reader = new FileReader();
+      reader.onload = e=>{
+        let entry;
+        try{
+          const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+          // always use the SKU tab; ignore PREPACK, XDO_METADATA, etc.
+          let sheetName = wb.SheetNames.find(n=>String(n).trim().toUpperCase()==='SKU');
+          if(!sheetName) sheetName = wb.SheetNames.find(n=>String(n).trim().toUpperCase().includes('SKU'));
+          const usedFallback = !sheetName;
+          if(!sheetName) sheetName = wb.SheetNames[0];
+          const ws = wb.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+          entry = process(file.name, rows);
+          entry.sheetUsed = sheetName;
+          entry.sheetFallback = usedFallback && wb.SheetNames.length>1;
+        }catch(err){
+          entry = {name:file.name, error:'Could not read this file: '+err.message};
+        }
+        // replace an existing file with the same name, otherwise append
+        const existing = files.findIndex(f=>f.name===entry.name);
+        if(existing>=0) files[existing]=entry; else files.push(entry);
+        if(--remaining===0){
+          activeIdx = files.findIndex(f=>f.name===list[list.length-1].name);
+          if(activeIdx<0) activeIdx = files.length-1;
+          updateUI();
+        }
+      };
+      reader.onerror = ()=>{
+        files.push({name:file.name, error:'The file could not be read from disk.'});
+        if(--remaining===0){ activeIdx=files.length-1; updateUI(); }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function process(name, rows){
+    if(!rows.length) return {name, error:'The file appears to be empty.'};
+
+    // find the header row: the row that contains a cell reading DEPARTMENT.
+    // Anything above it (titles like "PO - Barcode -SKU") is ignored.
+    let headerRow = -1;
+    for(let r=0; r<Math.min(rows.length, 50); r++){
+      if((rows[r]||[]).some(c=>c!=null && String(c).trim().toUpperCase()==='DEPARTMENT')){
+        headerRow = r; break;
+      }
+    }
+    if(headerRow===-1){
+      return {name, error:'Could not find the DEPARTMENT header row in the SKU sheet.'};
+    }
+
+    const rawHeaders = rows[headerRow].map(h=>h==null?null:String(h).trim());
+    const colIdx = [], headers = [];
+    rawHeaders.forEach((h,i)=>{
+      if(h && KNOWN_HEADERS.includes(h)){ colIdx.push(i); headers.push(h); }
+    });
+    if(headers.length===0){
+      return {name, error:'No recognised columns found. Expected headers like DEPARTMENT, ITEM_CODE, MRP…'};
+    }
+    const missing = KNOWN_HEADERS.filter(h=>!headers.includes(h));
+    const iDept = headers.indexOf('DEPARTMENT');
+    const iItem = headers.indexOf('ITEM_CODE');
+
+    const out = [], changed = [];
+    for(let r=headerRow+1;r<rows.length;r++){
+      const src = rows[r];
+      if(!src || src.every(v=>v==null||v==="")) continue;
+      const row=[], chg=[];
+      headers.forEach((h,ci)=>{
+        const orig = src[colIdx[ci]];
+        const fn = RULES[h];
+        const val = fn ? fn(orig) : orig;
+        row.push(val);
+        const origDisp = displayVal(orig), newDisp = displayVal(val);
+        chg.push(origDisp!==newDisp ? origDisp : null);
+      });
+      // skip totals/summary rows: no DEPARTMENT and no ITEM_CODE means
+      // it's not a real SKU line (e.g. an ORDER_QTY sum at the bottom)
+      const deptEmpty = iDept<0 || row[iDept]==null || String(row[iDept]).trim()==="";
+      const itemEmpty = iItem<0 || row[iItem]==null || String(row[iItem]).trim()==="";
+      if(deptEmpty && itemEmpty) continue;
+      out.push(row); changed.push(chg);
+    }
+    return {name, headers, rows:out, changed, missing};
+  }
+
+  function displayVal(v){
+    if(v==null) return "";
+    if(v instanceof Date){
+      return String(v.getMonth()+1).padStart(2,'0')+'/'+v.getFullYear();
+    }
+    return String(v);
+  }
+
+  function esc(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ---------- UI ---------- */
+
+  function updateUI(){
+    const has = files.length>0;
+    dz.classList.toggle('compact', has);
+    toolbar.classList.toggle('show', has);
+    filetabs.classList.toggle('show', has);
+    if(!has){
+      legend.classList.remove('show');
+      tableCard.classList.remove('show');
+      activeActions.classList.remove('show');
+      warn.classList.remove('show');
+      filetabs.innerHTML=""; tableCard.innerHTML="";
+      document.getElementById('summaryText').textContent="";
+      return;
+    }
+    const ok = files.filter(f=>!f.error);
+    const totRows = ok.reduce((a,f)=>a+f.rows.length,0);
+    const totChg = ok.reduce((a,f)=>a+f.changed.flat().filter(x=>x!==null).length,0);
+    document.getElementById('summaryText').innerHTML =
+      files.length+' file'+(files.length>1?'s':'')+' loaded <span>&middot; '+totRows+' rows &middot; '+totChg+' cells corrected</span>';
+
+    // tabs
+    filetabs.innerHTML="";
+    files.forEach((f,i)=>{
+      const tab=document.createElement('div');
+      tab.className='filetab'+(i===activeIdx?' active':'')+(f.error?' error':'');
+      const fn=document.createElement('div'); fn.className='fn'; fn.textContent=f.name; fn.title=f.name;
+      const meta=document.createElement('div'); meta.className='meta';
+      if(f.error){ meta.textContent='failed'; }
+      else{
+        const n=f.changed.flat().filter(x=>x!==null).length;
+        meta.innerHTML=f.rows.length+' rows &middot; <b>'+n+' fixed</b>';
+      }
+      const rm=document.createElement('button'); rm.className='remove'; rm.textContent='✕'; rm.title='Remove this file';
+      rm.addEventListener('click', e=>{
+        e.stopPropagation();
+        files.splice(i,1);
+        if(activeIdx>=files.length) activeIdx=files.length-1;
+        updateUI();
+      });
+      tab.append(fn,meta,rm);
+      tab.addEventListener('click', ()=>{ activeIdx=i; updateUI(); });
+      filetabs.appendChild(tab);
+    });
+
+    renderActive();
+  }
+
+  function renderActive(){
+    if(activeIdx<0 || activeIdx>=files.length){
+      legend.classList.remove('show');
+      tableCard.classList.remove('show');
+      activeActions.classList.remove('show');
+      warn.classList.remove('show');
+      return;
+    }
+    const f = files[activeIdx];
+    activeName.textContent = f.name;
+    if(f.error){
+      legend.classList.remove('show');
+      tableCard.classList.remove('show');
+      activeActions.classList.remove('show');
+      warn.textContent = f.error;
+      warn.classList.add('show','err');
+      return;
+    }
+    warn.classList.remove('err');
+    activeActions.classList.add('show');
+    legend.classList.add('show');
+
+    let html='<table><thead><tr>';
+    f.headers.forEach(h=>{
+      const g = GREEN_COLS.has(h);
+      html+='<th class="'+(g?'green-col':'')+'">'+esc(h)+(g?'<span class="tag">RULES</span>':'')+'</th>';
+    });
+    html+='</tr></thead><tbody>';
+    f.rows.forEach((row,r)=>{
+      html+='<tr>';
+      row.forEach((v,c)=>{
+        const old = f.changed[r][c];
+        if(old!==null){
+          html+='<td class="changed" data-old="'+esc(old)+'">'+esc(displayVal(v))+'</td>';
+        }else{
+          html+='<td>'+esc(displayVal(v))+'</td>';
+        }
+      });
+      html+='</tr>';
+    });
+    html+='</tbody></table>';
+    tableCard.innerHTML = html;
+    tableCard.classList.add('show');
+
+    const notes = [];
+    if(f.sheetFallback){
+      notes.push('No "SKU" tab was found in "'+f.name+'", so the first sheet ("'+f.sheetUsed+'") was used — please verify this is the right one.');
+    }
+    if(f.missing.length){
+      notes.push('These expected columns were not found in "'+f.name+'" and are left out: '+f.missing.join(', '));
+    }
+    if(notes.length){
+      warn.textContent = 'Heads up: '+notes.join(' ');
+      warn.classList.add('show');
+    } else {
+      warn.classList.remove('show');
+    }
+  }
+
+  /* ---------- download ---------- */
+
+  function buildWorkbook(f){
+    const aoa = [f.headers, ...f.rows.map(r=>r.map(v=> v instanceof Date ? displayVal(v) : v))];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = f.headers.map((h,ci)=>{
+      let w = h.length;
+      f.rows.forEach(r=>{ const l=displayVal(r[ci]).length; if(l>w) w=l; });
+      return {wch: Math.min(w+2, 40)};
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    return wb;
+  }
+
+  function outName(f){
+    return f.name.replace(/\.(xlsx|xls)$/i,'') + '_BUYER_FORMAT.xlsx';
+  }
+
+  function stamp(){
+    return new Date().toISOString().slice(0,10);
+  }
+
+  function buildMasterWorkbook(ok){
+    // master headers: the canonical column order, keeping only columns
+    // that appear in at least one uploaded file
+    const headers = KNOWN_HEADERS.filter(h=>ok.some(f=>f.headers.includes(h)));
+    const rows = [];
+    ok.forEach(f=>{
+      const map = headers.map(h=>f.headers.indexOf(h)); // -1 if this file lacks the column
+      f.rows.forEach(r=>{
+        rows.push(headers.map((h,i)=> map[i]>=0 ? (r[map[i]] instanceof Date ? displayVal(r[map[i]]) : r[map[i]]) : null));
+      });
+    });
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = headers.map((h,ci)=>{
+      let w = h.length;
+      rows.forEach(r=>{ const l=displayVal(r[ci]).length; if(l>w) w=l; });
+      return {wch: Math.min(w+2, 40)};
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'SKU');
+    return {wb, rowCount: rows.length};
+  }
+
+  function masterName(){
+    return 'MASTER_Buyer_File_'+stamp()+'.xlsx';
+  }
+
+  function downloadMaster(){
+    const ok = files.filter(f=>!f.error);
+    if(!ok.length) return;
+    XLSX.writeFile(buildMasterWorkbook(ok).wb, masterName());
+  }
+
+  function downloadOne(f){
+    if(f.error) return;
+    XLSX.writeFile(buildWorkbook(f), outName(f));
+  }
+
+  async function downloadAll(){
+    const ok = files.filter(f=>!f.error);
+    if(!ok.length) return;
+    if(ok.length===1){ downloadOne(ok[0]); return; }
+
+    const btn = document.getElementById('downloadAllBtn');
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Preparing ZIP…';
+    try{
+      const zip = new JSZip();
+      ok.forEach(f=>{
+        const data = XLSX.write(buildWorkbook(f), {type:'array', bookType:'xlsx'});
+        zip.file(outName(f), data);
+      });
+      // master file combining every uploaded file's rows for this session
+      const master = buildMasterWorkbook(ok);
+      zip.file(masterName(), XLSX.write(master.wb, {type:'array', bookType:'xlsx'}));
+      const blob = await zip.generateAsync({type:'blob'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Buyer_Files_'+stamp()+'.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    }catch(err){
+      alert('Could not build the ZIP: '+err.message);
+    }finally{
+      btn.disabled = false; btn.textContent = label;
+    }
+  }
+})();
+</script>
+</body>
+</html>
